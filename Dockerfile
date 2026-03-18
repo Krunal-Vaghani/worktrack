@@ -1,7 +1,7 @@
 FROM node:20-alpine
 WORKDIR /app
 
-# Build admin-dashboard
+# Build admin dashboard
 COPY admin-dashboard/package.json ./admin-dashboard/
 RUN cd admin-dashboard && npm install --legacy-peer-deps
 
@@ -15,4 +15,5 @@ RUN cd admin-server && npm install --production
 COPY admin-server/ ./admin-server/
 
 EXPOSE 3001
-CMD ["node", "admin-server/server.js"]
+ENV NODE_ENV=production
+CMD ["node", "/app/admin-server/server.js"]
