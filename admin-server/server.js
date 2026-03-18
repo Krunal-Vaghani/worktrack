@@ -60,7 +60,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/employees', require('./routes/employees'));
 
 // ── Admin dashboard (React SPA) ──────────────────────────
-const dashboardDist = path.join(__dirname, '../admin-dashboard/dist');
+const dashboardDist = path.join('/app/admin-dashboard/dist');
 app.use(express.static(dashboardDist));
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
