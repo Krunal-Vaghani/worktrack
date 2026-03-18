@@ -1,0 +1,17 @@
+node_modules/
+*/node_modules/
+dist/
+*/dist/
+renderer/dist/
+admin-dashboard/dist/
+.env
+admin-server/.env
+*.db
+*.db-shm
+*.db-wal
+*.log
+logs/
+.DS_Store
+Thumbs.db
+screenshots/
+.cache/
