@@ -56,11 +56,14 @@ app.use('/api/tasks',    taskRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/reports',  reportRoutes);
 app.use('/api/sync',      syncRoutes);
+app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/employees', require('./routes/employees'));
 
 // ── Admin dashboard (React SPA) ──────────────────────────
-const dashboardDist = path.join('/app/admin-dashboard/dist');
+// In Docker: /app/admin-dashboard/dist  |  In dev: ../admin-dashboard/dist
+const dashboardDist = process.env.DASHBOARD_DIST
+  || path.join(__dirname, '../admin-dashboard/dist');
 app.use(express.static(dashboardDist));
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
