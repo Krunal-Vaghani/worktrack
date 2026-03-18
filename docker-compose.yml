@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       worktrack
+      POSTGRES_USER:     worktrack_user
+      POSTGRES_PASSWORD: ${DB_PASS:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worktrack_user -d worktrack"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      NODE_ENV:         production
+      PORT:             3001
+      DB_HOST:          postgres
+      DB_PORT:          5432
+      DB_NAME:          worktrack
+      DB_USER:          worktrack_user
+      DB_PASS:          ${DB_PASS:-changeme}
+      JWT_SECRET:       ${JWT_SECRET:-change-this-in-production}
+      SYNC_SECRET:      ${SYNC_SECRET:-worktrack-sync-secret}
+      ADMIN_EMAIL:      ${ADMIN_EMAIL:-admin@worktrack.local}
+      ADMIN_PASSWORD:   ${ADMIN_PASSWORD:-admin123}
+      CORS_ORIGIN:      ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./admin-dashboard/dist:/app/admin-dashboard/dist:ro
+
+volumes:
+  pgdata:

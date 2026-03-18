@@ -1,0 +1,101 @@
+{
+  "name": "worktrack",
+  "version": "1.0.0",
+  "description": "Employee productivity tracking desktop application",
+  "main": "electron/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev:renderer": "cd renderer && npm run dev",
+    "dev:admin": "cd admin-dashboard && npm run dev",
+    "build:renderer": "cd renderer && npm run build",
+    "build:admin": "cd admin-dashboard && npm run build",
+    "build:all": "npm run build:renderer && npm run build:admin",
+    "dist": "npm run build:all && electron-builder",
+    "dist:win": "npm run build:all && electron-builder --win",
+    "server": "node admin-server/server.js"
+  },
+  "build": {
+    "appId": "com.worktrack.app",
+    "productName": "WorkTrack",
+    "copyright": "Copyright \u00a9 2025 WorkTrack",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build/assets"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/database/migrations",
+        "to": "migrations",
+        "filter": [
+          "**/*.sql"
+        ]
+      },
+      {
+        "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+        "to": "../node_modules/sql.js/dist/sql-wasm.wasm"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WorkTrack",
+      "runAfterFinish": true,
+      "installerIcon": "build/assets/installer.ico",
+      "uninstallerIcon": "build/assets/installer.ico",
+      "installerHeaderIcon": "build/assets/icon.ico",
+      "license": "build/assets/license.txt"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/assets/icon.png"
+    }
+  },
+  "keywords": [
+    "productivity",
+    "tracking",
+    "electron",
+    "desktop"
+  ],
+  "author": "WorkTrack",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "electron-log": "^5.1.1",
+    "electron-store": "^8.1.0",
+    "node-schedule": "^2.1.1",
+    "uuid": "^9.0.1",
+    "sql.js": "^1.12.0"
+  }
+}

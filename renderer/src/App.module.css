@@ -1,0 +1,94 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #fff;
+  overflow: hidden;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  height: 44px;
+  background: var(--blue);
+  flex-shrink: 0;
+}
+
+.titlebarLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+}
+
+.appName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.titlebarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userName {
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
+}
+
+.syncDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.syncOnline  { background: #4ADE80; }
+.syncOffline { background: rgba(255,255,255,0.3); }
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Tab bar */
+.tabbar {
+  display: flex;
+  border-top: 1px solid var(--gray-200);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.tabBtn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px 6px;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: var(--gray-400);
+  transition: color .15s;
+  font-size: 11px;
+}
+
+.tabBtn:hover { color: var(--gray-700); }
+
+.tabActive {
+  color: var(--blue) !important;
+}
+
+.tabIcon  { font-size: 16px; line-height: 1; }
+.tabLabel { font-size: 10px; font-weight: 500; }
