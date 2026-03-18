@@ -1,187 +1,138 @@
-import React, { useState } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line
-} from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import api from '../hooks/useApi.js';
 
-const MOCK_DAILY = [
-  { date:'Mon 13', tasks:8, active:6.2, idle:0.5, score:90 },
-  { date:'Tue 14', tasks:7, active:5.8, idle:0.8, score:85 },
-  { date:'Wed 15', tasks:9, active:7.1, idle:0.4, score:92 },
-  { date:'Thu 16', tasks:6, active:5.0, idle:1.2, score:79 },
-  { date:'Fri 17', tasks:8, active:6.5, idle:0.6, score:88 },
-];
-
-const MOCK_EMPLOYEES = [
-  { name:'Dev Patel',    tasks:42, hours:35.2, idle:2.1, score:93 },
-  { name:'Alice Chen',   tasks:38, hours:33.5, idle:2.8, score:91 },
-  { name:'Bob Martinez', tasks:35, hours:31.0, idle:3.2, score:86 },
-  { name:'Leo Zhang',    tasks:30, hours:28.4, idle:3.8, score:84 },
-  { name:'Sara Kim',     tasks:25, hours:24.1, idle:4.5, score:76 },
-  { name:'Mia Torres',   tasks:20, hours:19.8, idle:5.1, score:68 },
-];
-
-function fmt(seconds) {
-  if (!seconds) return '0m';
-  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-function ScoreChip({ score }) {
-  const bg    = score >= 85 ? '#F0FDF4' : score >= 70 ? '#FFFBEB' : '#FEF2F2';
-  const color = score >= 85 ? '#16A34A' : score >= 70 ? '#D97706' : '#DC2626';
-  return <span style={{ padding:'2px 9px', borderRadius:20, fontSize:11, fontWeight:600, background:bg, color }}>{score}%</span>;
-}
+function fmtDur(s) { if(!s)return'—'; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
+function ScoreChip({score}){ if(score==null)return null; const s=Math.round(score); const c=s>=80?'#16A34A':s>=60?'#D97706':'#DC2626'; const bg=s>=80?'#F0FDF4':s>=60?'#FFFBEB':'#FEF2F2'; return <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,background:bg,color:c}}>{s}%</span>; }
 
 export default function Reports() {
-  const [range,    setRange]    = useState('week');
-  const [employee, setEmployee] = useState('all');
+  const [tasks,     setTasks]     = useState([]);
+  const [summary,   setSummary]   = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [range,     setRange]     = useState('week');
+  const [empFilter, setEmpFilter] = useState('all');
+  const [loading,   setLoading]   = useState(true);
   const [exporting, setExporting] = useState('');
 
-  async function doExport(format) {
-    setExporting(format);
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ from: getFrom(range) });
+    if (empFilter !== 'all') params.set('userId', empFilter);
+
+    Promise.all([
+      api.get(`/tasks?${params}&limit=200`).catch(()=>[]),
+      api.get(`/tasks/summary?${params}`).catch(()=>[]),
+      api.get('/employees').catch(()=>[]),
+    ]).then(([t, s, e]) => {
+      setTasks(Array.isArray(t)?t:[]);
+      setSummary(Array.isArray(s)?s:[]);
+      setEmployees(Array.isArray(e)?e:[]);
+      setLoading(false);
+    });
+  }, [range, empFilter]);
+
+  function getFrom(r) {
+    const d = new Date();
+    if (r==='today') d.setHours(0,0,0,0);
+    else if (r==='week') d.setDate(d.getDate()-6);
+    else d.setDate(1);
+    return d.toISOString();
+  }
+
+  async function doExport(fmt) {
+    setExporting(fmt);
+    const params = new URLSearchParams({ from: getFrom(range) });
+    if (empFilter !== 'all') params.set('userId', empFilter);
     try {
-      const params = new URLSearchParams({ range, ...(employee !== 'all' && { userId: employee }) });
-      const res = await fetch(`/api/reports/${format}?${params}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('wt_token')}` }
-      });
-      if (!res.ok) throw new Error('Export failed');
+      const token = localStorage.getItem('wt_token');
+      const res = await fetch(`/api/reports/${fmt}?${params}`, { headers:{ Authorization:`Bearer ${token}` } });
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
-      a.href = url;
-      a.download = `worktrack_report.${format === 'excel' ? 'xlsx' : format}`;
-      a.click();
+      a.href = url; a.download = `worktrack_report.${fmt==='excel'?'xlsx':fmt}`; a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      alert('Server not running. Start the admin-server first.');
-    } finally {
-      setExporting('');
-    }
+    } catch { alert('Export failed'); }
+    setExporting('');
   }
 
-  const totalTasks  = MOCK_EMPLOYEES.reduce((s, e) => s + e.tasks, 0);
-  const totalHours  = MOCK_EMPLOYEES.reduce((s, e) => s + e.hours, 0).toFixed(1);
-  const avgScore    = Math.round(MOCK_EMPLOYEES.reduce((s, e) => s + e.score, 0) / MOCK_EMPLOYEES.length);
+  const totalTasks  = summary.reduce((s,e)=>s+(e.task_count||0),0);
+  const totalHours  = (summary.reduce((s,e)=>s+(Number(e.active_seconds)||0),0)/3600).toFixed(1);
+  const avgScore    = summary.length ? Math.round(summary.reduce((s,e)=>s+(Number(e.avg_score)||0),0)/summary.length) : 0;
 
   return (
     <div style={S.page}>
-      {/* Header */}
-      <div style={S.pageHeader}>
-        <div>
-          <h1 style={S.h1}>Reports</h1>
-          <p style={S.sub}>Productivity analytics and data exports</p>
-        </div>
-        <div style={S.headerRight}>
-          <select style={S.select} value={range} onChange={e => setRange(e.target.value)}>
+      <div style={S.header}>
+        <div><h1 style={S.h1}>Reports</h1><p style={S.sub}>Productivity analytics and exports</p></div>
+        <div style={{display:'flex',gap:8}}>
+          <select style={S.sel} value={range} onChange={e=>setRange(e.target.value)}>
             <option value="today">Today</option>
             <option value="week">This week</option>
             <option value="month">This month</option>
           </select>
-          <select style={S.select} value={employee} onChange={e => setEmployee(e.target.value)}>
+          <select style={S.sel} value={empFilter} onChange={e=>setEmpFilter(e.target.value)}>
             <option value="all">All employees</option>
-            {MOCK_EMPLOYEES.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+            {employees.map(e=><option key={e.user_id} value={e.user_id}>{e.name}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Summary metrics */}
-      <div style={S.metGrid}>
-        {[
-          { label:'Total tasks',      value: totalTasks },
-          { label:'Total hours',      value: `${totalHours}h` },
-          { label:'Avg productivity', value: `${avgScore}%`,   color:'#16A34A' },
-          { label:'Employees tracked',value: MOCK_EMPLOYEES.length },
-        ].map(c => (
-          <div key={c.label} style={S.metCard}>
-            <p style={S.metLabel}>{c.label}</p>
-            <p style={{ ...S.metVal, color: c.color || '#111827' }}>{c.value}</p>
+      {/* Metrics */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20}}>
+        {[{l:'Total tasks',v:totalTasks},{l:'Active hours',v:`${totalHours}h`},{l:'Avg score',v:`${avgScore}%`,c:avgScore>=80?'#16A34A':avgScore>=60?'#D97706':'#DC2626'}].map(c=>(
+          <div key={c.l} style={S.metCard}>
+            <div style={S.metLabel}>{c.l}</div>
+            <div style={{...S.metVal,color:c.c||'#111827'}}>{c.v}</div>
           </div>
         ))}
       </div>
 
-      {/* Charts row */}
-      <div style={S.row2}>
-        <div style={S.card}>
-          <h3 style={S.cardTitle}>Daily tasks completed</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={MOCK_DAILY} barSize={18}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-              <XAxis dataKey="date" tick={{ fontSize:11, fill:'#9CA3AF' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize:11, fill:'#9CA3AF' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius:8, border:'1px solid #E5E7EB', fontSize:12 }} />
-              <Bar dataKey="tasks" name="Tasks" fill="#2563EB" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div style={S.card}>
-          <h3 style={S.cardTitle}>Daily productivity score</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={MOCK_DAILY}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-              <XAxis dataKey="date" tick={{ fontSize:11, fill:'#9CA3AF' }} axisLine={false} tickLine={false} />
-              <YAxis domain={[60,100]} tick={{ fontSize:11, fill:'#9CA3AF' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={v => `${v}%`} contentStyle={{ borderRadius:8, border:'1px solid #E5E7EB', fontSize:12 }} />
-              <Line type="monotone" dataKey="score" stroke="#16A34A" strokeWidth={2.5} dot={{ r:4, fill:'#16A34A' }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Employee comparison table */}
-      <div style={{ ...S.card, marginBottom:20 }}>
-        <h3 style={S.cardTitle}>Employee comparison</h3>
-        <table style={S.table}>
-          <thead>
-            <tr>
-              {['Employee','Tasks','Active hours','Idle time','Avg score'].map(h => (
-                <th key={h} style={S.th}>{h}</th>
+      {/* Employee comparison */}
+      {summary.length > 0 && (
+        <div style={{...S.card,marginBottom:16}}>
+          <div style={S.cardTitle}>Employee comparison</div>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead><tr style={{color:'#6B7280'}}>
+              {['Employee','Tasks','Active','Idle','Score'].map(h=><th key={h} style={{textAlign:'left',padding:'0 0 10px',fontSize:11,fontWeight:500,textTransform:'uppercase',letterSpacing:'.04em'}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {summary.map((e,i)=>(
+                <tr key={i} style={{borderTop:'1px solid #F3F4F6'}}>
+                  <td style={{padding:'10px 0',fontWeight:500}}>{e.name}</td>
+                  <td style={{padding:'10px 0'}}>{e.task_count||0}</td>
+                  <td style={{padding:'10px 0'}}>{fmtDur(e.active_seconds)}</td>
+                  <td style={{padding:'10px 0',color:'#D97706'}}>{fmtDur(e.idle_seconds)}</td>
+                  <td style={{padding:'10px 0'}}><ScoreChip score={e.avg_score}/></td>
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {MOCK_EMPLOYEES.map((emp, i) => (
-              <tr key={i} style={{ borderTop:'1px solid #F3F4F6' }}>
-                <td style={S.td}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ ...S.avatar, background:['#EDE9FE','#DBEAFE','#ECFDF5','#FEF3C7','#FCE7F3','#FEF2F2'][i] }}>
-                      {emp.name.split(' ').map(n=>n[0]).join('')}
-                    </div>
-                    {emp.name}
-                  </div>
-                </td>
-                <td style={S.td}>{emp.tasks}</td>
-                <td style={S.td}>{emp.hours}h</td>
-                <td style={{ ...S.td, color:'#D97706' }}>{emp.idle}h</td>
-                <td style={S.td}><ScoreChip score={emp.score} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Task list */}
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={S.cardTitle}>Task completions {loading&&<span style={{fontSize:12,color:'#9CA3AF',fontWeight:400}}>Loading…</span>}</div>
+        {!loading && tasks.length === 0 && <div style={{color:'#9CA3AF',fontSize:13}}>No tasks for this period.</div>}
+        {tasks.filter(t=>t.end_time).slice(0,50).map((t,i)=>(
+          <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 0',borderBottom:'1px solid #F3F4F6',fontSize:13}}>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:500}}>{t.task_name}</div>
+              <div style={{fontSize:11,color:'#9CA3AF',marginTop:1}}>{t.user_name||''} · {new Date(t.start_time).toLocaleDateString()} · {fmtDur(t.total_duration)}</div>
+            </div>
+            <ScoreChip score={t.productivity_score}/>
+          </div>
+        ))}
       </div>
 
-      {/* Export section */}
+      {/* Exports */}
       <div style={S.card}>
-        <h3 style={S.cardTitle}>Export report</h3>
-        <p style={{ fontSize:13, color:'#6B7280', marginBottom:16 }}>
-          Download the filtered data in your preferred format.
-        </p>
-        <div style={S.exportRow}>
-          {[
-            { fmt:'csv',   icon:'📄', label:'CSV',   desc:'Plain text, opens in any spreadsheet' },
-            { fmt:'excel', icon:'📊', label:'Excel',  desc:'Formatted .xlsx with colored headers' },
-            { fmt:'pdf',   icon:'📋', label:'PDF',    desc:'Printable report with summary stats' },
-          ].map(({ fmt, icon, label, desc }) => (
-            <button
-              key={fmt}
-              style={{ ...S.exportCard, opacity: exporting === fmt ? 0.7 : 1 }}
-              onClick={() => doExport(fmt)}
-              disabled={!!exporting}
-            >
-              <span style={{ fontSize:28 }}>{icon}</span>
-              <span style={{ fontSize:14, fontWeight:600 }}>{exporting===fmt ? 'Downloading…' : `Download ${label}`}</span>
-              <span style={{ fontSize:12, color:'#9CA3AF' }}>{desc}</span>
+        <div style={S.cardTitle}>Export</div>
+        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+          {[{fmt:'csv',icon:'📄',label:'CSV'},{fmt:'excel',icon:'📊',label:'Excel'},{fmt:'pdf',icon:'📋',label:'PDF'}].map(({fmt,icon,label})=>(
+            <button key={fmt} onClick={()=>doExport(fmt)} disabled={!!exporting}
+              style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:4,padding:'14px 18px',border:'1px solid #E5E7EB',borderRadius:10,background:'#fff',cursor:'pointer',opacity:exporting===fmt?.7:1}}>
+              <span style={{fontSize:24}}>{icon}</span>
+              <span style={{fontSize:13,fontWeight:600}}>{exporting===fmt?'Downloading…':`Download ${label}`}</span>
             </button>
           ))}
         </div>
@@ -191,23 +142,14 @@ export default function Reports() {
 }
 
 const S = {
-  page:       { padding:28, maxWidth:1280, margin:'0 auto' },
-  pageHeader: { display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:24 },
-  h1:         { fontSize:22, fontWeight:600, color:'#111827' },
-  sub:        { fontSize:13, color:'#6B7280', marginTop:2 },
-  headerRight:{ display:'flex', gap:8 },
-  select:     { padding:'8px 12px', border:'1px solid #E5E7EB', borderRadius:8, fontSize:13, background:'#fff', color:'#374151', cursor:'pointer' },
-  metGrid:    { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 },
-  metCard:    { background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'16px 18px' },
-  metLabel:   { fontSize:12, color:'#6B7280', marginBottom:6 },
-  metVal:     { fontSize:26, fontWeight:600, lineHeight:1 },
-  row2:       { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 },
-  card:       { background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'18px 20px' },
-  cardTitle:  { fontSize:14, fontWeight:500, color:'#111827', marginBottom:14 },
-  table:      { width:'100%', borderCollapse:'collapse' },
-  th:         { fontSize:11, fontWeight:500, color:'#6B7280', textTransform:'uppercase', letterSpacing:'.04em', padding:'0 0 10px', textAlign:'left' },
-  td:         { padding:'10px 0', fontSize:13, color:'#374151' },
-  avatar:     { width:26, height:26, borderRadius:'50%', fontSize:10, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', color:'#374151', flexShrink:0 },
-  exportRow:  { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 },
-  exportCard: { display:'flex', flexDirection:'column', gap:6, alignItems:'flex-start', padding:'16px 18px', border:'1px solid #E5E7EB', borderRadius:10, background:'#fff', cursor:'pointer', textAlign:'left', transition:'border-color .15s, background .15s' },
+  page:      { padding:28 },
+  header:    { display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20 },
+  h1:        { fontSize:22,fontWeight:600,color:'#111827' },
+  sub:       { fontSize:13,color:'#6B7280',marginTop:2 },
+  sel:       { padding:'8px 12px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:13,background:'#fff',cursor:'pointer' },
+  metCard:   { background:'#fff',border:'1px solid #E5E7EB',borderRadius:12,padding:'16px 18px' },
+  metLabel:  { fontSize:12,color:'#6B7280',marginBottom:6 },
+  metVal:    { fontSize:24,fontWeight:600 },
+  card:      { background:'#fff',border:'1px solid #E5E7EB',borderRadius:12,padding:'18px 20px' },
+  cardTitle: { fontSize:14,fontWeight:500,color:'#111827',marginBottom:14 },
 };
