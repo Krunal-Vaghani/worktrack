@@ -30,13 +30,13 @@ const store = new Store({
     userId:            { type: 'string',  default: '' },
     userName:          { type: 'string',  default: '' },
     userRole:          { type: 'string',  default: '' },
-    serverUrl:         { type: 'string',  default: 'http://localhost:3001' },
+    serverUrl:         { type: 'string',  default: 'https://worktrack-production-599c.up.railway.app' },
     idleThreshold:     { type: 'number',  default: 300 },
     screenshotEnabled: { type: 'boolean', default: false },
     screenshotInterval:{ type: 'number',  default: 600 },
     autoStart:         { type: 'boolean', default: true },
     minimizeToTray:    { type: 'boolean', default: true },
-    syncToken:         { type: 'string',  default: 'worktrack-sync-secret' },
+    syncToken:         { type: 'string',  default: 'mycompany-sync-2025' },
   }
 });
 
