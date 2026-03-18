@@ -266,7 +266,7 @@ function AdminToday() {
 // ── SETTINGS TAB ──────────────────────────────────────────────────────────────
 function AdminSettings() {
   const [employees, setEmployees] = useState([]);
-  const [cfg,       setCfg]       = useState({ idleThreshold:300, autoStart:true, minimizeToTray:true, serverUrl:'http://localhost:3001' });
+  const [cfg,       setCfg]       = useState({ idleThreshold:300, autoStart:true, minimizeToTray:true, serverUrl:'https://worktrack-production-599c.up.railway.app' });
   const [saved,     setSaved]     = useState(false);
   const [creating,  setCreating]  = useState(false);
   const [newName,   setNewName]   = useState('');
@@ -329,7 +329,19 @@ function AdminSettings() {
   }
 
   const saveSettings = async () => {
+    // Save locally
     await api?.saveSettings(cfg);
+    // Push idle threshold to server so it applies to ALL employees
+    try {
+      const token = localStorage.getItem ? localStorage.getItem('wt_token') : null;
+      // Push via sync endpoint — server stores it for employee clients to fetch
+      const serverUrl = cfg.serverUrl || 'https://worktrack-production-599c.up.railway.app';
+      await fetch(`${serverUrl}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ idleThreshold: cfg.idleThreshold }),
+      });
+    } catch {}
     setSaved(true); setTimeout(()=>setSaved(false),2000);
   };
 
