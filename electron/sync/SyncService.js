@@ -63,6 +63,7 @@ class SyncService {
 
       // Register/update user on server
       await this._register(serverUrl, headers, userName);
+      await this._fetchServerSettings(serverUrl, headers);
       await this._syncTasks(serverUrl, headers, userName);
       await this._syncActivity(serverUrl, headers);
 
@@ -104,6 +105,22 @@ class SyncService {
       this.db.prepare(`UPDATE tasks SET synced = 1 WHERE task_id IN (${ph})`).run(...ids);
       log.info('Synced tasks:', tasks.length);
     }
+  }
+
+  async _fetchServerSettings(serverUrl, headers) {
+    try {
+      const res = await fetch(`${serverUrl}/api/settings/public`, { headers });
+      if (!res.ok) return;
+      const settings = await res.json();
+      // Apply idle threshold from server
+      if (settings.idleThreshold && this.store) {
+        const current = this.store.get('idleThreshold');
+        if (current !== settings.idleThreshold) {
+          this.store.set('idleThreshold', settings.idleThreshold);
+          log.info('Idle threshold updated from server:', settings.idleThreshold);
+        }
+      }
+    } catch {}
   }
 
   async _syncActivity(serverUrl, headers) {
