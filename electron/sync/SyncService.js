@@ -97,9 +97,11 @@ class SyncService {
 
   async _register(serverUrl, headers) {
     try {
+      // Send password hash so the user can also log in to the web dashboard
+      const passwordHash = this.store.get('_pwHash') || null;
       await fetch(`${serverUrl}/api/sync/register`, {
         method: 'POST', headers,
-        body: JSON.stringify({ name: this._getName() }),
+        body: JSON.stringify({ name: this._getName(), passwordHash }),
       });
     } catch {}
   }
@@ -169,11 +171,11 @@ class SyncService {
     } catch { return []; }
   }
 
-  async serverCreateEmployee(name, role) {
+  async serverCreateEmployee(name, role, passwordHash) {
     try {
       const res = await fetch(`${this._getUrl()}/api/sync/employees`, {
         method: 'POST', headers: this._headers(),
-        body: JSON.stringify({ name, role }),
+        body: JSON.stringify({ name, role, passwordHash: passwordHash || null }),
       });
       return res.json();
     } catch (err) { return { error: err.message }; }
@@ -181,7 +183,7 @@ class SyncService {
 
   async serverUpdateEmployee(userId, data) {
     try {
-      const res = await fetch(`${this._getUrl()}/api/sync/employees/${userId}`, {
+      const res = await fetch(`${this._getUrl()}/api/sync/employees/${encodeURIComponent(userId)}`, {
         method: 'PATCH', headers: this._headers(),
         body: JSON.stringify(data),
       });
