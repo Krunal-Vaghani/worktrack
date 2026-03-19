@@ -31,12 +31,12 @@ export const api = {
   put:    (path, body)   => apiFetch(path, { method: 'PUT',   body: JSON.stringify(body) }),
   delete: (path)         => apiFetch(path, { method: 'DELETE' }),
 
-  // Auth
-  login: (email, password) =>
+  // Auth — uses userId not email (consistent with EXE)
+  login: (userId, password) =>
     fetch(`${BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ userId, password }),
     }).then(r => r.json()),
 };
 
