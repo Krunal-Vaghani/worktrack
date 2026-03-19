@@ -91,7 +91,7 @@ async function initialize() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_tasks_user_start ON tasks(user_id, start_time DESC);
-    CREATE INDEX IF NOT EXISTS idx_tasks_date       ON tasks(DATE(start_time));
+    CREATE INDEX IF NOT EXISTS idx_tasks_date       ON tasks(start_time);
     CREATE INDEX IF NOT EXISTS idx_activity_task    ON activity_logs(task_id);
     CREATE INDEX IF NOT EXISTS idx_activity_user    ON activity_logs(user_id, timestamp DESC);
   `);
