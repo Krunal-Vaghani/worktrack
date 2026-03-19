@@ -48,9 +48,22 @@ export default function Employees() {
     } catch (e) { setCreateErr(e.message); }
   }
 
+  const [resetResult, setResetResult] = useState(null);
+
   async function toggleActive(emp) {
     await api.patch(`/employees/${emp.user_id}`, { active: !emp.active });
     load();
+  }
+
+  async function resetPassword(emp) {
+    // Generate a random password, hash it client-side via server endpoint
+    const newPw = Math.random().toString(36).slice(2,8).toUpperCase() +
+                  Math.random().toString(36).slice(2,6);
+    try {
+      await api.patch(`/employees/${emp.user_id}`, { newPassword: newPw });
+      setResetResult({ name: emp.name, password: newPw });
+      setTimeout(() => setResetResult(null), 30000);
+    } catch { alert('Failed to reset password'); }
   }
 
   async function deleteEmployee(emp) {
@@ -94,6 +107,16 @@ export default function Employees() {
               <button onClick={createEmployee} style={S.confirmBtn}>Create</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Password reset result */}
+      {resetResult && (
+        <div style={{background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:10,padding:14,marginBottom:16,fontSize:13}}>
+          <div style={{fontWeight:600,color:'#92400E',marginBottom:6}}>🔑 New password for {resetResult.name}:</div>
+          <div style={{fontFamily:'monospace',fontSize:15,color:'#78350F',letterSpacing:'.05em'}}>{resetResult.password}</div>
+          <div style={{fontSize:11,color:'#B45309',marginTop:6}}>Share this with the employee. Disappears in 30 seconds.</div>
+          <button onClick={()=>setResetResult(null)} style={{marginTop:8,padding:'3px 10px',border:'1px solid #D97706',borderRadius:5,background:'#fff',color:'#D97706',fontSize:11,cursor:'pointer'}}>Dismiss</button>
         </div>
       )}
 
