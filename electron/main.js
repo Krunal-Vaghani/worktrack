@@ -166,6 +166,8 @@ function setupIPC() {
     store.set('userId',   user.user_id);
     store.set('userName', user.name);
     store.set('userRole', user.role);
+    // Store hash so SyncService can register this user on the server
+    if (user.password) store.set('_pwHash', user.password);
     isLoggedIn = true;
     if (!activityMonitor) initServices();
     // Recover any unfinished tasks
@@ -286,9 +288,10 @@ function setupIPC() {
     // Create locally (needed for login)
     const local = userRepo.createWithCredentials(trimmed, role || 'employee', null);
     if (local.error) return { success: false, error: local.error };
-    // Mirror to server
+    // Mirror to server WITH password hash so employee can log in to web dashboard
     if (syncService?.isConnected) {
-      await syncService.serverCreateEmployee(trimmed, role || 'employee').catch(() => {});
+      const created = userRepo.getById(trimmed);
+      await syncService.serverCreateEmployee(trimmed, role || 'employee', created?.password).catch(() => {});
     }
     return { success: true, employee: local };
   });
@@ -298,14 +301,25 @@ function setupIPC() {
     if (!user) return { success: false, error: 'User not found' };
     const pw = userRepo._generatePassword();
     userRepo.updatePassword(userId, pw);
+    // Sync new hash to server so web login also uses new password
+    const updated = userRepo.getById(userId);
+    if (syncService?.isConnected && updated?.password) {
+      await syncService.serverUpdateEmployee(userId, { passwordHash: updated.password }).catch(() => {});
+    }
     return { success: true, userId, newPassword: pw };
   });
 
   ipcMain.handle('admin-update-employee', async (_, { userId, name, role, password }) => {
     if (role)     userRepo.db.prepare('UPDATE users SET role = ? WHERE user_id = ?').run(role, userId);
     if (password) userRepo.updatePassword(userId, password);
-    if (syncService?.isConnected && role) {
-      await syncService.serverUpdateEmployee(userId, { role }).catch(() => {});
+    if (syncService?.isConnected) {
+      const updated = userRepo.getById(userId);
+      const serverData = {};
+      if (role)     serverData.role = role;
+      if (password && updated?.password) serverData.passwordHash = updated.password;
+      if (Object.keys(serverData).length > 0) {
+        await syncService.serverUpdateEmployee(userId, serverData).catch(() => {});
+      }
     }
     return { success: true, employee: userRepo.getById(userId) };
   });
