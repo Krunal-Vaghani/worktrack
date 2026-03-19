@@ -4,17 +4,30 @@
  */
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME     || 'worktrack',
-  user:     process.env.DB_USER     || 'postgres',
-  password: process.env.DB_PASS     || process.env.DB_PASSWORD || 'postgres',
-  max:      20,
-  idleTimeoutMillis:   30000,
-  connectionTimeoutMillis: 5000,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-});
+// Railway injects DATABASE_URL automatically when you add a Postgres plugin.
+// Always prefer it over individual vars.
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },  // required on Railway
+      max: 20,
+      idleTimeoutMillis:      30000,
+      connectionTimeoutMillis: 5000,
+    }
+  : {
+      host:     process.env.DB_HOST     || 'localhost',
+      port:     parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME     || 'worktrack',
+      user:     process.env.DB_USER     || 'postgres',
+      password: process.env.DB_PASS     || process.env.DB_PASSWORD || 'postgres',
+      max:      20,
+      idleTimeoutMillis:      30000,
+      connectionTimeoutMillis: 5000,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    };
+
+console.log('[DB] Using', process.env.DATABASE_URL ? 'DATABASE_URL' : 'individual DB_* vars');
+const pool = new Pool(poolConfig);
 
 pool.on('error', (err) => console.error('[DB] Pool error:', err.message));
 
