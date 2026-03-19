@@ -25,7 +25,7 @@ export default function Settings() {
       if (s.idleThreshold)     setCfg(c=>({...c, idleThreshold:s.idleThreshold}));
       if (s.screenshotEnabled !== undefined) setCfg(c=>({...c, screenshotEnabled:s.screenshotEnabled}));
       if (s.screenshotInterval) setCfg(c=>({...c, screenshotInterval:s.screenshotInterval}));
-      setServerInfo({ serverUrl: s.serverUrl || window.location.origin, syncToken: s.syncToken || '' });
+      setServerInfo({ serverUrl: s.serverUrl || window.location.origin, syncToken: s.syncToken || 'mycompany-sync-2025' });
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
