@@ -54,12 +54,17 @@ router.post('/', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PATCH /api/employees/:id — update role or disable
+// PATCH /api/employees/:id — update role, disable, or reset password
 router.patch('/:id', requireAdmin, async (req, res) => {
   try {
-    const { role, active } = req.body;
+    const { role, active, newPassword } = req.body;
     if (role !== undefined)   await db.query('UPDATE users SET role = $1 WHERE user_id = $2', [role, req.params.id]);
     if (active !== undefined) await db.query('UPDATE users SET active = $1 WHERE user_id = $2', [active, req.params.id]);
+    if (newPassword) {
+      const bcrypt = require('bcrypt');
+      const hash   = await bcrypt.hash(newPassword, 12);
+      await db.query('UPDATE users SET password_hash = $1 WHERE user_id = $2', [hash, req.params.id]);
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

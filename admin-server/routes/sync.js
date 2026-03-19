@@ -18,17 +18,30 @@ function clientAuth(req, res, next) {
   next();
 }
 
-// POST /api/sync/register — called on first launch to register employee
+// POST /api/sync/register — called on first launch to register/update employee
 router.post('/register', clientAuth, async (req, res) => {
-  const { name } = req.body;
+  const { name, passwordHash } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   try {
-    await db.query(
-      `INSERT INTO users (user_id, name, role, device_id)
-       VALUES ($1, $2, 'employee', $3)
-       ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, device_id = EXCLUDED.device_id`,
-      [req.clientUserId, name, req.headers['x-device-id'] || '']
-    );
+    if (passwordHash) {
+      // Upsert with password so user can log in to web dashboard too
+      await db.query(
+        `INSERT INTO users (user_id, name, role, device_id, password_hash, active)
+         VALUES ($1, $2, 'employee', $3, $4, true)
+         ON CONFLICT (user_id) DO UPDATE SET
+           name = EXCLUDED.name,
+           device_id = EXCLUDED.device_id,
+           password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash)`,
+        [req.clientUserId, name, req.headers['x-device-id'] || '', passwordHash]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO users (user_id, name, role, device_id, active)
+         VALUES ($1, $2, 'employee', $3, true)
+         ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, device_id = EXCLUDED.device_id`,
+        [req.clientUserId, name, req.headers['x-device-id'] || '']
+      );
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -123,15 +136,15 @@ router.get('/employees', clientAuth, async (req, res) => {
 
 // POST /api/sync/employees — EXE admin creates employee on server
 router.post('/employees', clientAuth, async (req, res) => {
-  const { name, role } = req.body;
+  const { name, role, passwordHash } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
   const userId = name.trim();
   try {
     const exists = await db.query('SELECT 1 FROM users WHERE user_id = $1', [userId]);
     if (exists.rows.length > 0) return res.status(409).json({ error: `User "${userId}" already exists` });
     await db.query(
-      `INSERT INTO users (user_id, name, role, device_id, active) VALUES ($1,$2,$3,'',true)`,
-      [userId, userId, role || 'employee']
+      `INSERT INTO users (user_id, name, role, device_id, active, password_hash) VALUES ($1,$2,$3,'',true,$4)`,
+      [userId, userId, role || 'employee', passwordHash || null]
     );
     res.json({ success: true, user_id: userId, name: userId, role: role || 'employee' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -139,11 +152,12 @@ router.post('/employees', clientAuth, async (req, res) => {
 
 // PATCH /api/sync/employees/:id — EXE admin updates employee
 router.patch('/employees/:id', clientAuth, async (req, res) => {
-  const { role, active, disabled } = req.body;
+  const { role, active, disabled, passwordHash } = req.body;
   try {
-    if (role    !== undefined) await db.query('UPDATE users SET role=$1   WHERE user_id=$2', [role, req.params.id]);
-    if (active  !== undefined) await db.query('UPDATE users SET active=$1 WHERE user_id=$2', [active, req.params.id]);
-    if (disabled !== undefined) await db.query('UPDATE users SET active=$1 WHERE user_id=$2', [!disabled, req.params.id]);
+    if (role         !== undefined) await db.query('UPDATE users SET role=$1         WHERE user_id=$2', [role, req.params.id]);
+    if (active       !== undefined) await db.query('UPDATE users SET active=$1       WHERE user_id=$2', [active, req.params.id]);
+    if (disabled     !== undefined) await db.query('UPDATE users SET active=$1       WHERE user_id=$2', [!disabled, req.params.id]);
+    if (passwordHash !== undefined) await db.query('UPDATE users SET password_hash=$1 WHERE user_id=$2', [passwordHash, req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
