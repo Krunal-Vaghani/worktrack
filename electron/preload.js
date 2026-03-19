@@ -34,4 +34,5 @@ contextBridge.exposeInMainWorld('worktrack', {
   onActiveWindowChanged: (cb) => { ipcRenderer.on('active-window-changed', (_, d) => cb(d)); return () => ipcRenderer.removeAllListeners('active-window-changed'); },
   onIdleStatusChanged:   (cb) => { ipcRenderer.on('idle-status-changed',   (_, d) => cb(d)); return () => ipcRenderer.removeAllListeners('idle-status-changed'); },
   onTaskStopped:         (cb) => { ipcRenderer.on('task-stopped',          (_, d) => cb(d)); return () => ipcRenderer.removeAllListeners('task-stopped'); },
+  onSettingsChanged:     (cb) => { ipcRenderer.on('settings-changed',       ()    => cb());  return () => ipcRenderer.removeAllListeners('settings-changed'); },
 });

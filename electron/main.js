@@ -149,6 +149,10 @@ function initServices() {
 
   idleDetector.start();
   syncService.start();
+  syncService.onSettingsChange(() => {
+    if (idleDetector) idleDetector.setThreshold(store.get('idleThreshold'));
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings-changed');
+  });
 }
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
@@ -257,15 +261,36 @@ function setupIPC() {
 
   // ── ADMIN: USER MANAGEMENT ─────────────────────────────────────────────────
 
+  // ── ADMIN: EMPLOYEE MANAGEMENT ─────────────────────────────────────────────
+  // All admin employee ops write to BOTH local SQLite AND server PostgreSQL
+  // so EXE and web stay in perfect sync.
+
   ipcMain.handle('admin-get-employees', async () => {
-    return userRepo.getEmployees();
+    if (syncService?.isConnected) {
+      try { return await syncService.serverGetEmployees(); } catch {}
+    }
+    return userRepo.getAll(); // offline fallback
+  });
+
+  ipcMain.handle('admin-get-all-employees', async () => {
+    if (syncService?.isConnected) {
+      try { return await syncService.serverGetEmployees(); } catch {}
+    }
+    return userRepo.getAll();
   });
 
   ipcMain.handle('admin-create-employee', async (_, { name, role }) => {
     if (!name?.trim()) return { success: false, error: 'Name is required' };
-    const result = userRepo.createWithCredentials(name.trim(), role || 'employee', null);
-    if (result.error) return { success: false, error: result.error };
-    return { success: true, employee: result };
+    const trimmed = name.trim();
+    if (/\s/.test(trimmed)) return { success: false, error: 'No spaces allowed' };
+    // Create locally (needed for login)
+    const local = userRepo.createWithCredentials(trimmed, role || 'employee', null);
+    if (local.error) return { success: false, error: local.error };
+    // Mirror to server
+    if (syncService?.isConnected) {
+      await syncService.serverCreateEmployee(trimmed, role || 'employee').catch(() => {});
+    }
+    return { success: true, employee: local };
   });
 
   ipcMain.handle('admin-reset-password', async (_, { userId }) => {
@@ -277,23 +302,27 @@ function setupIPC() {
   });
 
   ipcMain.handle('admin-update-employee', async (_, { userId, name, role, password }) => {
-    if (name)     userRepo.updateName(userId, name);
     if (role)     userRepo.db.prepare('UPDATE users SET role = ? WHERE user_id = ?').run(role, userId);
     if (password) userRepo.updatePassword(userId, password);
+    if (syncService?.isConnected && role) {
+      await syncService.serverUpdateEmployee(userId, { role }).catch(() => {});
+    }
     return { success: true, employee: userRepo.getById(userId) };
   });
 
   ipcMain.handle('admin-toggle-access', async (_, { userId, disabled }) => {
     userRepo.db.prepare('UPDATE users SET disabled = ? WHERE user_id = ?').run(disabled ? 1 : 0, userId);
+    if (syncService?.isConnected) {
+      await syncService.serverUpdateEmployee(userId, { active: !disabled }).catch(() => {});
+    }
     return { success: true };
-  });
-
-  ipcMain.handle('admin-get-all-employees', async () => {
-    return userRepo.getAll();
   });
 
   ipcMain.handle('admin-delete-employee', async (_, { userId }) => {
     userRepo.delete(userId);
+    if (syncService?.isConnected) {
+      await syncService.serverDeleteEmployee(userId).catch(() => {});
+    }
     return { success: true };
   });
 
@@ -321,6 +350,10 @@ function setupIPC() {
     Object.entries(settings).forEach(([k, v]) => store.set(k, v));
     if (idleDetector && settings.idleThreshold) idleDetector.setThreshold(settings.idleThreshold);
     if (settings.autoStart !== undefined) app.setLoginItemSettings({ openAtLogin: settings.autoStart, openAsHidden: true });
+    // Push to server so all clients get the update
+    if (syncService?.isConnected) {
+      await syncService.serverSaveSettings(settings).catch(() => {});
+    }
     return { success: true };
   });
 
@@ -330,6 +363,7 @@ function setupIPC() {
     isConnected:  syncService?.isConnected || false,
     pendingCount: syncService?.getPendingCount() || 0,
     lastSync:     syncService?.lastSyncTime || null,
+    serverUrl:    store.get('serverUrl') || '',
   }));
 }
 
